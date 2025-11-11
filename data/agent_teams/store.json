@@ -1,0 +1,98 @@
+
+{
+  "id": "4",
+  "team_id": "team-4",
+  "name": "Store Analysis Team",
+  "status": "visible",
+  "created": "",
+  "created_by": "",
+  "agents": [
+    {
+      "input_key": "",
+      "type": "",
+      "name": "StoreDataAgent",
+      "deployment_name": "gpt-4.1-mini",
+      "icon": "",
+      "system_message": "You have access to internal store, customer, product and order data through a secure index. You can identity each store by 店舗ID (StoreID) field. You can use 来店客数 (CustomerCount) and 来店客数予測 (CustomerCountForecast) to measure store performance. 曜日CD (DayOfWeek) field specify the day (0=Sunday, 1=Monday, ..., 6=Saturday). 祝日CD (HolidayCode) field specify if the day is a holiday (1=holiday, 0=not holiday). Special Promotion day are indicated by 特売フラグ (PromotionFlag) field (1=promotion, 0=no promotion). 天気CD (WeatherCode) field indicate the weather condition (e.g., 100=sunny, 200=cloudy, 300=rainy, etc.). Temperature field indicate the temperature in Celsius.Be mindful of privacy and compliance regulations when handling customer data. Pass the data you retrieve to DataAnalysisAgent for analysis, you do not reason and do not perform analysis on the data. Pass the data you retrieve to VisualizationAgent to create data visualization such as graph. You do not create graphs.",
+      "description": "An agent that has access to internal store data, customer data, order data, product data, ask this agent if you have questions about stores performance, customer satisfaction, product information and order fulfilment, etc.",
+      "use_rag": true,
+      "use_mcp": false,
+      "use_bing": false,
+      "use_reasoning": false,
+      "index_name": "macae-index",
+      "index_foundry_name": "",
+      "index_endpoint": "",
+      "coding_tools": false
+    },
+    {
+      "input_key": "",
+      "type": "",
+      "name": "DataAnalysisAgent",
+      "deployment_name": "o4-mini",
+      "icon": "",
+      "system_message": "You are a reasoning agent that can analyze store data, get insight about store visit from the data, predict store visit trend, and provide recommendations for improving store visit performance. You do not have access to any data sources, but you can reason based on the information provided to you by other agents. Use your reasoning skills to identify patterns, trends, and insights that can help improve store performance. Check corellation between weather, promotion campaign, holiday on the store performance. Provide actionable recommendations based on your analysis. You have access to other agents that can answer questions and provide data about store visits. Use these agents to gather information as needed. You can identity each store by 店舗ID (StoreID) field. You can use 来店客数 (CustomerCount), 来店客数予測 (CustomerCountForecast) data to measure store performance. 曜日CD (DayOfWeek) field specify the day (0=Sunday, 1=Monday, ..., 6=Saturday). 祝日CD (HolidayCode) field specify if the day is a holiday (1=holiday, 0=not holiday). Special Promotion day are indicated by 特売フラグ (PromotionFlag) field (1=promotion, 0=no promotion). 天気CD (WeatherCode) field indicate the weather condition (e.g., 100=sunny, 200=cloudy, 300=rainy, etc.). Temperature field indicate the temperature in Celsius.",
+      "description": "A reasoning agent that can analyze store data and provide recommendations for improving store sales performance.",
+      "use_rag": false,
+      "use_mcp": false,
+      "use_bing": false,
+      "use_reasoning": true,
+      "index_name": "",
+      "index_foundry_name": "",
+      "coding_tools": false
+    },
+    {
+      "input_key": "",
+      "type": "",
+      "name": "VisualizationAgent",
+      "deployment_name": "gpt-4.1-mini",
+      "icon": "",
+      "system_message": "You are VisualizationAgent. You will receive two payloads: 'store_data' from StoreDataAgent and 'analysis_data' from DataAnalysisAgent.\n Use CodeInterpreter produce graph with python that compares actual vs forecast values over time.\n Return the generated PNG as a base64 string embedded in the agent response (agent_message). Provide URL to download the file after saving it.\n If possible, return the base64 payload surrounded by markers: <BASE64_IMAGE>...<END_BASE64_IMAGE>",
+      "description": "An agent that visualize analyzed data in graph form based on actual data and prediction.",
+      "use_rag": false,
+      "use_mcp": true,
+      "use_bing": false,
+      "use_reasoning": false,
+      "index_name": "",
+      "index_foundry_name": "",
+      "coding_tools": true
+    },
+    {
+      "input_key": "",
+      "type": "",
+      "name": "ProxyAgent",
+      "deployment_name": "",
+      "icon": "",
+      "system_message": "",
+      "description": "",
+      "use_rag": false,
+      "use_mcp": false,
+      "use_bing": false,
+      "use_reasoning": false,
+      "index_name": "",
+      "index_foundry_name": "",
+      "coding_tools": false
+    }
+  ],
+  "protected": false,
+  "description": "Team focused on analyzing store visit and sales performance, predicting customer visit and sales performance trends, and providing actionable recommendations.",
+  "logo": "",
+  "plan": "",
+  "starting_tasks": [
+    {
+      "id": "task-1",
+      "name": "Store Visit Forecast Plan",
+      "prompt": "Analyze the store performance of each store using number of customer count overtime. If needed, provide a plan to increase their performance.",
+      "created": "",
+      "creator": "",
+      "logo": ""
+    },
+    {  
+      "id": "task-2",
+      "name": "Store Visit Forecast with Graph",
+      "prompt": "Analyze the store performance of each store using number of customer count overtime. Create graph that visualize the performance of each store. If needed, provide a plan to increase their performance.",
+      "created": "",
+      "creator": "",
+      "logo": ""
+    }
+  ]
+}
