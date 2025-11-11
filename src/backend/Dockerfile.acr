@@ -1,0 +1,18 @@
+# Simplified Dockerfile for Azure Container Registry (no BuildKit required)
+FROM python:3.11-slim-bullseye
+
+WORKDIR /app
+
+# Copy UV installer
+COPY --from=ghcr.io/astral-sh/uv:0.6.3 /uv /uvx /bin/
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH"
+
+# Copy project files
+COPY uv.lock pyproject.toml ./
+COPY . .
+
+# Install dependencies
+RUN uv sync --frozen --no-dev
+
+EXPOSE 8000
+CMD ["uv", "run", "uvicorn", "app_kernel:app", "--host", "0.0.0.0", "--port", "8000"]

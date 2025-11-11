@@ -33,6 +33,7 @@ import ContentNotFound from "../NotFound/ContentNotFound";
 import PlanChatBody from "./PlanChatBody";
 import renderAgentMessages from "./streaming/StreamingAgentMessage";
 import StreamingBufferMessage from "./streaming/StreamingBufferMessage";
+import { FollowUpQuestions } from "./FollowUpQuestions";
 
 interface SimplifiedPlanChatProps extends PlanChatProps {
   onPlanReceived?: (planData: MPlanData) => void;
@@ -107,6 +108,17 @@ const PlanChat: React.FC<SimplifiedPlanChatProps> = ({
         {/* Plan response with all information */}
         {renderPlanResponse(planApprovalRequest, handleApprovePlan, handleRejectPlan, processingApproval, showApprovalButtons)}
         {renderAgentMessages(agentMessages)}
+        
+        {/* Show follow-up questions after the last agent message */}
+        {agentMessages.length > 0 && (
+          <FollowUpQuestions
+            content={agentMessages[agentMessages.length - 1]?.content || ''}
+            onQuestionClick={(question: string) => {
+              setInput(question);
+              OnChatSubmit(question);
+            }}
+          />
+        )}
 
         {showProcessingPlanSpinner && renderPlanExecutionMessage()}
         {/* Streaming plan updates */}

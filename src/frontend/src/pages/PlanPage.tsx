@@ -345,6 +345,8 @@ const PlanPage: React.FC = () => {
                 setAgentMessages(prev => [...prev, agentMessageData]);
                 setSelectedTeam(planData?.team || null);
                 scrollToBottom();
+                // Keep input enabled so user can ask follow-up questions
+                setSubmittingChatDisableInput(false);
                 // Persist the agent message
                 const is_final = true;
                 if (planData?.plan) {
