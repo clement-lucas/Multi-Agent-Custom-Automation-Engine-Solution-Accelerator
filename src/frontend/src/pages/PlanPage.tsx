@@ -349,6 +349,8 @@ const PlanPage: React.FC = () => {
                 scrollToBottom();
                 // Keep input enabled so user can ask follow-up questions
                 setSubmittingChatDisableInput(false);
+                // Clear any pending clarification requests since the plan is complete
+                setClarificationMessage(null);
                 // Persist the agent message
                 const is_final = true;
                 if (planData?.plan) {
