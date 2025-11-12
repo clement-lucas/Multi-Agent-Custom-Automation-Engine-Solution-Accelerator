@@ -17,7 +17,13 @@ CONTAINER_APP_NAME="ca-odmadevycpyl"
 APP_SERVICE_NAME="app-odmadevycpyl"
 BACKEND_IMAGE_NAME="macae-backend"
 FRONTEND_IMAGE_NAME="macae-frontend"
-IMAGE_TAG="latest"
+
+# Generate unique tag based on timestamp and git commit (if available)
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "local")
+IMAGE_TAG="${TIMESTAMP}-${GIT_COMMIT}"
+
+echo -e "${YELLOW}Image Tag: ${IMAGE_TAG}${NC}"
 
 # Get the script directory
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -31,6 +37,7 @@ cd "$PROJECT_ROOT/src/backend"
 az acr build \
   --registry $ACR_NAME \
   --image "${BACKEND_IMAGE_NAME}:${IMAGE_TAG}" \
+  --image "${BACKEND_IMAGE_NAME}:latest" \
   --file Dockerfile.acr \
   .
 
@@ -39,6 +46,7 @@ cd "$PROJECT_ROOT/src/frontend"
 az acr build \
   --registry $ACR_NAME \
   --image "${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}" \
+  --image "${FRONTEND_IMAGE_NAME}:latest" \
   --file Dockerfile.acr \
   .
 
@@ -71,9 +79,15 @@ az webapp restart \
   --resource-group $RESOURCE_GROUP
 
 echo -e "${GREEN}=== Deployment Complete ===${NC}"
-echo -e "Backend Image: ${ACR_LOGIN_SERVER}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
+echo -e "Deployment Tag: ${IMAGE_TAG}"
+echo -e "Backend Images:"
+echo -e "  - ${ACR_LOGIN_SERVER}/${BACKEND_IMAGE_NAME}:${IMAGE_TAG}"
+echo -e "  - ${ACR_LOGIN_SERVER}/${BACKEND_IMAGE_NAME}:latest (updated)"
 echo -e "Backend Container App: $CONTAINER_APP_NAME"
-echo -e "Frontend Image: ${ACR_LOGIN_SERVER}/${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
+echo -e ""
+echo -e "Frontend Images:"
+echo -e "  - ${ACR_LOGIN_SERVER}/${FRONTEND_IMAGE_NAME}:${IMAGE_TAG}"
+echo -e "  - ${ACR_LOGIN_SERVER}/${FRONTEND_IMAGE_NAME}:latest (updated)"
 echo -e "Frontend App Service: https://${APP_SERVICE_NAME}.azurewebsites.net"
 echo ""
 echo -e "${YELLOW}To view backend logs:${NC}"

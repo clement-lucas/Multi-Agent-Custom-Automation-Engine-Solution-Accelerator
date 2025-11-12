@@ -621,6 +621,38 @@ const PlanPage: React.FC = () => {
         [planData?.plan, showToast, dismissToast, loadPlanData]
     );
 
+    // Handler for follow-up questions - submits as a new task
+    const handleFollowUpQuestion = useCallback(
+        async (question: string) => {
+            if (!question.trim()) {
+                return;
+            }
+
+            const id = showToast("Submitting follow-up question", "progress");
+
+            try {
+                // Submit as a new task (same as HomePage)
+                const response = await apiService.createPlan({ description: question });
+                
+                dismissToast(id);
+                
+                if (response.plan_id) {
+                    // Navigate to the new plan page
+                    navigate(`/plan/${response.plan_id}`);
+                } else {
+                    showToast("Failed to create plan for follow-up question", "error");
+                }
+            } catch (error: any) {
+                dismissToast(id);
+                showToast(
+                    error?.message || "Failed to submit follow-up question",
+                    "error"
+                );
+            }
+        },
+        [showToast, dismissToast, navigate]
+    );
+
 
     // ✅ Handlers for PlanPanelLeft with plan cancellation protection
     const handleNewTaskButton = useCallback(() => {
@@ -718,6 +750,7 @@ const PlanPage: React.FC = () => {
                             <PlanChat
                                 planData={planData}
                                 OnChatSubmit={handleOnchatSubmit}
+                                OnFollowUpQuestion={handleFollowUpQuestion}
                                 loading={loading}
                                 setInput={setInput}
                                 submittingChatDisableInput={submittingChatDisableInput}

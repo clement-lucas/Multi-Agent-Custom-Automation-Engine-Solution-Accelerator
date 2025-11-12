@@ -6,6 +6,7 @@ import uuid
 from typing import List, Optional
 
 from common.config.app_config import config
+from common.database.database_factory import DatabaseFactory
 from common.models.messages_kernel import TeamConfiguration
 from semantic_kernel.agents.orchestration.magentic import MagenticOrchestration
 from semantic_kernel.agents.runtime import InProcessRuntime
@@ -94,14 +95,18 @@ class OrchestrationManager:
 
     @classmethod
     async def get_current_or_new_orchestration(
-        cls, user_id: str, team_config: TeamConfiguration, team_switched: bool
-    ) -> MagenticOrchestration:  # add team_switched: bool parameter
+        cls, user_id, team_config, team_switched: bool = False
+    ):
         """get existing orchestration instance."""
         current_orchestration = orchestration_config.get_current_orchestration(user_id)
+        
         if (
             current_orchestration is None or team_switched
-        ):  # add check for team_switched flag
+        ):  # Only recreate on team switch, not on completion
             if current_orchestration is not None and team_switched:
+                # Log why we're recreating
+                cls.logger.info(f"Recreating orchestration for user {user_id}: team switched")
+                
                 for agent in current_orchestration._members:
                     if agent.name != "ProxyAgent":
                         try:
@@ -123,7 +128,20 @@ class OrchestrationManager:
         # Use the new event-driven method to set approval as pending
         orchestration_config.set_approval_pending(job_id)
 
-        magentic_orchestration = orchestration_config.get_current_orchestration(user_id)
+        # Get the team configuration for this user
+        memory_store = await DatabaseFactory.get_database(user_id=user_id)
+        user_current_team = await memory_store.get_current_team(user_id=user_id)
+        team = await memory_store.get_team_by_id(team_id=user_current_team.team_id if user_current_team else None)
+        
+        if not team:
+            raise ValueError(f"Team configuration not found for user {user_id}")
+        
+        # Get current or create new orchestration
+        magentic_orchestration = await self.get_current_or_new_orchestration(
+            user_id=user_id, 
+            team_config=team, 
+            team_switched=False
+        )
 
         if magentic_orchestration is None:
             raise ValueError("Orchestration not initialized for user.")
@@ -167,6 +185,7 @@ class OrchestrationManager:
                     message_type=WebsocketMessageType.FINAL_RESULT_MESSAGE,
                 )
                 self.logger.info(f"Final result sent via WebSocket to user {user_id}")
+                    
             except Exception as e:
                 self.logger.info(f"Error: {e}")
                 self.logger.info(f"Error type: {type(e).__name__}")

@@ -49,6 +49,7 @@ interface SimplifiedPlanChatProps extends PlanChatProps {
   handleApprovePlan: () => Promise<void>;
   handleRejectPlan: () => Promise<void>;
   processingApproval: boolean;
+  OnFollowUpQuestion?: (question: string) => void;
 
 }
 
@@ -58,6 +59,7 @@ const PlanChat: React.FC<SimplifiedPlanChatProps> = ({
   setInput,
   submittingChatDisableInput,
   OnChatSubmit,
+  OnFollowUpQuestion,
   onPlanApproval,
   onPlanReceived,
   initialTask,
@@ -114,8 +116,13 @@ const PlanChat: React.FC<SimplifiedPlanChatProps> = ({
           <FollowUpQuestions
             content={agentMessages[agentMessages.length - 1]?.content || ''}
             onQuestionClick={(question: string) => {
-              setInput(question);
-              OnChatSubmit(question);
+              // Use OnFollowUpQuestion handler if provided, otherwise fall back to OnChatSubmit
+              if (OnFollowUpQuestion) {
+                OnFollowUpQuestion(question);
+              } else {
+                setInput(question);
+                OnChatSubmit(question);
+              }
             }}
           />
         )}
