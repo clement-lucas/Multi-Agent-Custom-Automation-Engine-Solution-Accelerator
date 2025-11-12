@@ -569,12 +569,40 @@ const PlanPage: React.FC = () => {
     const handleOnchatSubmit = useCallback(
         async (chatInput: string) => {
             if (!chatInput.trim()) {
-                showToast("Please enter a clarification", "error");
+                showToast("Please enter a message", "error");
                 return;
             }
             setInput("");
 
             if (!planData?.plan) return;
+
+            // If plan is completed, treat input as a new task (follow-up question)
+            if (planData.plan.overall_status === PlanStatus.COMPLETED) {
+                const id = showToast("Creating new plan", "progress");
+                
+                try {
+                    // Submit as a new task using TaskService which generates session_id
+                    const response = await TaskService.createPlan(chatInput);
+                    
+                    dismissToast(id);
+                    
+                    if (response.plan_id) {
+                        // Navigate to the new plan page
+                        navigate(`/plan/${response.plan_id}`);
+                    } else {
+                        showToast("Failed to create plan", "error");
+                    }
+                } catch (error: any) {
+                    dismissToast(id);
+                    showToast(
+                        error?.message || "Failed to create plan",
+                        "error"
+                    );
+                }
+                return;
+            }
+
+            // Otherwise, submit as clarification for in-progress plan
             setSubmittingChatDisableInput(true);
             let id = showToast("Submitting clarification", "progress");
 
@@ -620,7 +648,7 @@ const PlanPage: React.FC = () => {
 
             }
         },
-        [planData?.plan, showToast, dismissToast, loadPlanData]
+        [planData?.plan, showToast, dismissToast, loadPlanData, navigate]
     );
 
     // Handler for follow-up questions - submits as a new task
