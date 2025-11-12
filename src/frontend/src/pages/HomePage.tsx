@@ -14,6 +14,7 @@ import ContentToolbar from '@/coral/components/Content/ContentToolbar';
 import { TeamConfig } from '../models/Team';
 import { TeamService } from '../services/TeamService';
 import InlineToaster, { useInlineToaster } from "../components/toast/InlineToaster";
+import { APP_VERSION } from '../version';
 
 /**
  * HomePage component - displays task lists and provides navigation
@@ -206,6 +207,20 @@ const HomePage: React.FC = () => {
                                 <Spinner label="Loading team configuration..." />
                             </div>
                         )}
+                        <div style={{
+                            position: 'fixed',
+                            bottom: '10px',
+                            right: '10px',
+                            fontSize: '11px',
+                            color: '#666',
+                            opacity: 0.7,
+                            padding: '4px 8px',
+                            backgroundColor: 'rgba(255,255,255,0.8)',
+                            borderRadius: '4px',
+                            zIndex: 1000
+                        }}>
+                            v{APP_VERSION}
+                        </div>
                     </Content>
 
                 </CoralShellRow>

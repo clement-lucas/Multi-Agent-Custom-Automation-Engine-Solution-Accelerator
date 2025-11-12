@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom";
 import { Spinner, Text } from "@fluentui/react-components";
 import { PlanDataService } from "../services/PlanDataService";
+import { TaskService } from "../services/TaskService";
 import { ProcessedPlanData, WebsocketMessageType, MPlanData, AgentMessageData, AgentMessageType, ParsedUserClarification, AgentType, PlanStatus, FinalMessage, TeamConfig } from "../models";
 import PlanChat from "../components/content/PlanChat";
 import PlanPanelRight from "../components/content/PlanPanelRight";
@@ -22,6 +23,7 @@ import { APIService } from "../api/apiService";
 import { StreamMessage, StreamingPlanUpdate } from "../models";
 import { usePlanCancellationAlert } from "../hooks/usePlanCancellationAlert";
 import PlanCancellationDialog from "../components/common/PlanCancellationDialog";
+import { APP_VERSION } from "../version";
 
 import "../styles/PlanPage.css"
 
@@ -631,8 +633,8 @@ const PlanPage: React.FC = () => {
             const id = showToast("Submitting follow-up question", "progress");
 
             try {
-                // Submit as a new task (same as HomePage)
-                const response = await apiService.createPlan({ description: question });
+                // Submit as a new task using TaskService which generates session_id
+                const response = await TaskService.createPlan(question);
                 
                 dismissToast(id);
                 
@@ -773,6 +775,20 @@ const PlanPage: React.FC = () => {
                             />
                         </>
                     )}
+                    <div style={{
+                        position: 'fixed',
+                        bottom: '10px',
+                        right: '10px',
+                        fontSize: '11px',
+                        color: '#666',
+                        opacity: 0.7,
+                        padding: '4px 8px',
+                        backgroundColor: 'rgba(255,255,255,0.8)',
+                        borderRadius: '4px',
+                        zIndex: 1000
+                    }}>
+                        v{APP_VERSION}
+                    </div>
                 </Content>
 
                 <PlanPanelRight
