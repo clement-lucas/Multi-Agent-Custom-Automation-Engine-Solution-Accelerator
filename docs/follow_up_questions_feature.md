@@ -37,6 +37,276 @@ User can either:
 
 ---
 
+## Technical Architecture
+
+### Orchestration Lifecycle with Follow-Up Questions
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         USER INITIATES NEW TASK                              │
+│                    (Either initial or follow-up question)                    │
+└────────────────────────────────┬────────────────────────────────────────────┘
+                                 │
+                                 ▼
+                    ┌────────────────────────┐
+                    │   Frontend (React)     │
+                    │  TaskService.createPlan│
+                    └────────────┬───────────┘
+                                 │
+                                 │ POST /api/v3/process_request
+                                 │ {session_id, description, team_id?}
+                                 │
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                        BACKEND ORCHESTRATION MANAGER                         │
+│                         (orchestration_manager.py)                           │
+└────────────────────────────────┬───────────────────────────────────────────┘
+                                 │
+                                 ▼
+                    ┌────────────────────────┐
+                    │  run_orchestration()   │
+                    │   Lines 123-136        │
+                    └────────────┬───────────┘
+                                 │
+                                 │ 1. Get team configuration
+                                 │    memory_store = DatabaseFactory.get_database(user_id)
+                                 │    team = memory_store.get_team_by_id(...)
+                                 │
+                                 ▼
+                    ┌────────────────────────┐
+                    │ get_current_or_new     │
+                    │    _orchestration()    │
+                    │   Lines 94-118         │
+                    └────────────┬───────────┘
+                                 │
+                    ┌────────────┴────────────┐
+                    │                         │
+        Does orchestration exist?      Team switched?
+                    │                         │
+        ┌───────────▼─────────┐   ┌──────────▼───────────┐
+        │   NO (First Task)   │   │   YES (Team Change)  │
+        └─────────┬───────────┘   └──────────┬───────────┘
+                  │                           │
+                  │                           │ Close old agents
+                  │                           │ await agent.close()
+                  │                           │
+                  └───────────┬───────────────┘
+                              │
+                              ▼
+                ┌─────────────────────────────┐
+                │  Create New Orchestration   │
+                │  MagenticAgentFactory       │
+                │  init_orchestration()       │
+                └──────────────┬──────────────┘
+                               │
+                               │ Store in orchestration_config
+                               │ orchestrations[user_id] = new_instance
+                               │
+        ┌──────────────────────┴──────────────────────┐
+        │                                             │
+        ▼                                             ▼
+┌───────────────┐                          ┌─────────────────┐
+│ YES (Exists)  │                          │  Orchestration  │
+│ REUSE IT      │                          │     Created     │
+└───────┬───────┘                          └────────┬────────┘
+        │                                           │
+        │ Same orchestration instance               │
+        │ Different plan_id                         │
+        │ Different session_id                      │
+        │                                           │
+        └───────────────┬───────────────────────────┘
+                        │
+                        ▼
+        ┌───────────────────────────────┐
+        │   Execute Task with Agents    │
+        │   (Semantic Kernel)           │
+        │   - WebSocket connections     │
+        │   - Agent context preserved   │
+        │   - New plan_id created       │
+        └───────────────┬───────────────┘
+                        │
+                        │ Task executes...
+                        │ Agents collaborate...
+                        │
+                        ▼
+        ┌───────────────────────────────┐
+        │    Task Completion            │
+        │   (PlanStatus.COMPLETED)      │
+        └───────────────┬───────────────┘
+                        │
+                        ▼
+        ┌───────────────────────────────┐
+        │ human_approval_manager.py     │
+        │   final_append()              │
+        │   Lines 75-87                 │
+        └───────────────┬───────────────┘
+                        │
+                        │ Generate 3 follow-up questions
+                        │ Append to final answer
+                        │
+                        ▼
+        ┌───────────────────────────────┐
+        │   WebSocket: FINAL_ANSWER     │
+        │   {status: COMPLETED, ...}    │
+        └───────────────┬───────────────┘
+                        │
+                        ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                        FRONTEND (PlanPage.tsx)                             │
+│                      WebSocket Handler Lines 340-365                       │
+└───────────────────────────────────────────────────────────────────────────┘
+                        │
+                        ├──► setSubmittingChatDisableInput(false)
+                        │    (Keep input enabled)
+                        │
+                        ├──► setClarificationMessage(null)
+                        │    (Clear stale state)
+                        │
+                        └──► Display follow-up questions
+                             (FollowUpQuestions.tsx)
+                        │
+        ┌───────────────┴───────────────┐
+        │                               │
+        ▼                               ▼
+┌─────────────────┐          ┌──────────────────┐
+│ User Clicks     │          │ User Types in    │
+│ Follow-Up       │          │ Chat Input       │
+│ Button          │          │                  │
+└────────┬────────┘          └────────┬─────────┘
+         │                            │
+         │ handleFollowUpQuestion     │ handleOnchatSubmit
+         │ Lines 625-648              │ Lines 569-619
+         │                            │
+         │                            │ Check: planData.plan.overall_status
+         │                            │
+         │                            ├─► IF COMPLETED:
+         │                            │   TaskService.createPlan()
+         │                            │
+         │                            └─► IF IN_PROGRESS:
+         │                                submitClarification()
+         │                            │
+         └────────────┬───────────────┘
+                      │
+                      ▼
+         ┌────────────────────────┐
+         │ TaskService.createPlan │
+         │   Lines 175-205        │
+         └────────────┬───────────┘
+                      │
+                      │ Generate new session_id
+                      │ sid_{timestamp}_{random}
+                      │
+                      ▼
+         ┌────────────────────────┐
+         │ Navigate to New Plan   │
+         │ /plan/{new_plan_id}    │
+         └────────────┬───────────┘
+                      │
+                      └──────► CYCLE REPEATS
+                              (Orchestration instance REUSED)
+                              (New plan_id created)
+                              (Same agents, same team)
+
+
+═══════════════════════════════════════════════════════════════════════════
+                           KEY ARCHITECTURE POINTS
+═══════════════════════════════════════════════════════════════════════════
+
+1. ORCHESTRATION REUSE
+   ✅ One orchestration instance per user
+   ✅ Persists across multiple tasks/follow-ups
+   ✅ Only recreated when team switches
+   ✅ Each task gets new plan_id and session_id
+
+2. TEAM CONFIGURATION
+   ✅ Retrieved from database on each orchestration request
+   ✅ Validated before orchestration creation
+   ✅ Determines which agents are available
+   ✅ Preserved for follow-up questions (team_switched=False)
+
+3. STATE ISOLATION
+   ✅ Each task: unique plan_id + session_id
+   ✅ No state pollution between tasks
+   ✅ Framework handles isolation correctly
+   ✅ Agent context maintained in orchestration instance
+
+4. INPUT ROUTING
+   ✅ Completed plans: Create new plan
+   ✅ In-progress plans: Submit clarification
+   ✅ Both buttons and chat input work identically
+   ✅ Clarification state cleared on completion
+
+5. WEBSOCKET CONNECTIONS
+   ✅ Maintained across orchestration lifetime
+   ✅ Agents can communicate with frontend
+   ✅ No reconnection needed for follow-ups
+   ✅ Lost if orchestration is recreated
+
+═══════════════════════════════════════════════════════════════════════════
+```
+
+### State Transition Diagram
+
+```
+                    ┌──────────────────┐
+                    │   NO PLAN        │
+                    │   (Initial)      │
+                    └────────┬─────────┘
+                             │
+                             │ User submits task
+                             │ POST /process_request
+                             │
+                             ▼
+                    ┌──────────────────┐
+                    │   IN_PROGRESS    │◄──────┐
+                    │                  │       │
+                    │  - Executing     │       │ Clarification
+                    │  - May request   │       │ submitted
+                    │    clarification │       │
+                    └────────┬─────────┘       │
+                             │                 │
+                             │ Task completes  │
+                             │                 │
+                             ▼                 │
+                    ┌──────────────────┐       │
+                    │   COMPLETED      │       │
+                    │                  │       │
+                    │  ✅ Input enabled│       │
+                    │  ✅ Follow-ups   │       │
+                    │     displayed    │       │
+                    │  ✅ Clarification│       │
+                    │     state cleared│       │
+                    └────────┬─────────┘       │
+                             │                 │
+              ┌──────────────┴──────────────┐  │
+              │                             │  │
+              ▼                             ▼  │
+    ┌─────────────────┐          ┌─────────────────┐
+    │ Follow-Up Click │          │  Type in Chat   │
+    └─────────┬───────┘          └────────┬────────┘
+              │                           │
+              │                           │ Check status:
+              │                           │ COMPLETED?
+              │                           │
+              └───────────┬───────────────┘
+                          │
+                          │ YES: Create new plan
+                          │ (Both routes same)
+                          │
+                          ▼
+                    ┌──────────────────┐
+                    │   NEW PLAN       │
+                    │   IN_PROGRESS    │
+                    │                  │
+                    │  - New plan_id   │
+                    │  - New session_id│
+                    │  - Same team     │
+                    │  - REUSED orch.  │
+                    └──────────────────┘
+```
+
+---
+
 ## Backend Changes
 
 ### 1. Follow-Up Questions Generation
