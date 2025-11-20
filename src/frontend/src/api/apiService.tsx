@@ -21,6 +21,7 @@ import {
 // Constants for endpoints
 const API_ENDPOINTS = {
     PROCESS_REQUEST: '/v3/process_request',
+    CONTINUE_PLAN: '/v3/continue_plan',
     PLANS: '/v3/plans',
     PLAN: '/v3/plan',
     PLAN_APPROVAL: '/v3/plan_approval',
@@ -105,6 +106,8 @@ export class APIService {
     private _cache = new APICache();
     private _requestTracker = new RequestTracker();
 
+    // Expose endpoints for external use
+    public readonly ENDPOINTS = API_ENDPOINTS;
 
     /**
      * Create a new plan with RAI validation
@@ -117,6 +120,28 @@ export class APIService {
 
     async createPlan(inputTask: InputTask): Promise<InputTaskResponse> {
         return apiClient.post(API_ENDPOINTS.PROCESS_REQUEST, inputTask);
+    }
+
+    /**
+     * Continue an existing plan with a follow-up question while maintaining context
+     * @param planId The ID of the plan to continue
+     * @param followUpQuestion The follow-up question or task
+     * @returns Promise with response containing status and plan information
+     */
+    async continuePlan(
+        planId: string,
+        followUpQuestion: string
+    ): Promise<{status: string; plan_id: string; session_id: string}> {
+        const response = await apiClient.post(API_ENDPOINTS.CONTINUE_PLAN, {
+            plan_id: planId,
+            follow_up_question: followUpQuestion
+        });
+
+        // Invalidate cache since plan will be updated
+        this._cache.invalidate(new RegExp(`^plan.*_${planId}`));
+        this._cache.invalidate(new RegExp(`^plans_`));
+
+        return response;
     }
 
     /**

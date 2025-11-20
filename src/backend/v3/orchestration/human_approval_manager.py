@@ -40,6 +40,8 @@ class HumanApprovalMagenticManager(StandardMagenticManager):
     approval_enabled: bool = True
     magentic_plan: Optional[MPlan] = None
     current_user_id: str
+    is_continuation: bool = False
+    current_plan_id: Optional[str] = None
 
     def __init__(self, user_id: str, *args, **kwargs):
         """

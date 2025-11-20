@@ -29,6 +29,18 @@ echo -e "${YELLOW}Image Tag: ${IMAGE_TAG}${NC}"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$SCRIPT_DIR"
 
+# Update version.ts file with current deployment info
+echo -e "${YELLOW}Updating version.ts with deployment info...${NC}"
+VERSION_FILE="$PROJECT_ROOT/src/frontend/src/version.ts"
+cat > "$VERSION_FILE" << EOF
+// This file tracks the app version for deployment verification
+// Version format: YYYYMMDD-HHMMSS (build timestamp)
+// Update APP_VERSION before each deployment to track changes
+export const APP_VERSION = '${TIMESTAMP}'; // Auto-updated by deployment script
+export const GIT_COMMIT = '${GIT_COMMIT}'; // Git commit hash
+EOF
+echo -e "${GREEN}Version file updated: ${TIMESTAMP} (${GIT_COMMIT})${NC}"
+
 echo -e "${YELLOW}Step 1: Logging into Azure Container Registry...${NC}"
 az acr login --name $ACR_NAME
 

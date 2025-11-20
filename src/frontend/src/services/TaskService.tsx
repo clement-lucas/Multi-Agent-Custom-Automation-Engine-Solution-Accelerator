@@ -202,6 +202,24 @@ export class TaskService {
       throw new Error(message);
     }
   }
+
+  /**
+   * Continue an existing plan with a follow-up question while maintaining context
+   * @param planId - The ID of the plan to continue
+   * @param followUpQuestion - The follow-up question or task
+   * @returns Promise with response containing status and plan information
+   */
+  static async continuePlan(
+    planId: string,
+    followUpQuestion: string
+  ): Promise<{status: string; plan_id: string; session_id: string}> {
+    try {
+      return await apiService.continuePlan(planId, followUpQuestion);
+    } catch (error: any) {
+      let message = "Unable to continue plan. Please try again.";
+      throw new Error(message);
+    }
+  }
 }
 
 export default TaskService;

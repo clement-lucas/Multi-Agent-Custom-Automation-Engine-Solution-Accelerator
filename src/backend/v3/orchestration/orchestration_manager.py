@@ -120,6 +120,94 @@ class OrchestrationManager:
             )
         return orchestration_config.get_current_orchestration(user_id)
 
+    async def continue_orchestration(self, user_id, plan_id, input_task) -> None:
+        """Continue an existing orchestration with a follow-up question, maintaining context."""
+        
+        self.logger.info(f"Continuing orchestration for user {user_id}, plan {plan_id}")
+        
+        # Get the team configuration for this user
+        memory_store = await DatabaseFactory.get_database(user_id=user_id)
+        user_current_team = await memory_store.get_current_team(user_id=user_id)
+        team = await memory_store.get_team_by_id(
+            team_id=user_current_team.team_id if user_current_team else None
+        )
+        
+        if not team:
+            raise ValueError(f"Team configuration not found for user {user_id}")
+        
+        # Get the existing orchestration (should exist and maintain context)
+        magentic_orchestration = await self.get_current_or_new_orchestration(
+            user_id=user_id,
+            team_config=team,
+            team_switched=False
+        )
+        
+        if magentic_orchestration is None:
+            raise ValueError("Orchestration not initialized for user.")
+        
+        # Set flag to indicate this is a continuation
+        if hasattr(magentic_orchestration, "_manager"):
+            magentic_orchestration._manager.is_continuation = True
+            magentic_orchestration._manager.current_plan_id = plan_id
+        
+        try:
+            if hasattr(magentic_orchestration, "_manager") and hasattr(
+                magentic_orchestration._manager, "current_user_id"
+            ):
+                magentic_orchestration._manager.current_user_id = user_id
+                self.logger.debug(f"DEBUG: Set user_id on manager = {user_id}")
+        except Exception as e:
+            self.logger.error(f"Error setting user_id on manager: {e}")
+        
+        runtime = InProcessRuntime()
+        runtime.start()
+        
+        try:
+            # Add follow-up question to conversation context
+            follow_up_message = f"Follow-up question: {input_task.description}"
+            
+            orchestration_result = await magentic_orchestration.invoke(
+                task=follow_up_message,
+                runtime=runtime,
+            )
+            
+            try:
+                self.logger.info("\nProcessing follow-up question:")
+                value = await orchestration_result.get()
+                self.logger.info(f"\nFollow-up result:\n{value}")
+                self.logger.info("=" * 50)
+                
+                # Send final result via WebSocket
+                await connection_config.send_status_update_async(
+                    {
+                        "type": WebsocketMessageType.FINAL_RESULT_MESSAGE,
+                        "data": {
+                            "content": str(value),
+                            "status": "completed",
+                            "timestamp": asyncio.get_event_loop().time(),
+                        },
+                    },
+                    user_id,
+                    message_type=WebsocketMessageType.FINAL_RESULT_MESSAGE,
+                )
+                self.logger.info(f"Follow-up result sent via WebSocket to user {user_id}")
+                
+            except Exception as e:
+                self.logger.info(f"Error: {e}")
+                self.logger.info(f"Error type: {type(e).__name__}")
+                if hasattr(e, "__dict__"):
+                    self.logger.info(f"Error attributes: {e.__dict__}")
+                self.logger.info("=" * 50)
+        
+        except Exception as e:
+            self.logger.error(f"Unexpected error in continuation: {e}")
+        finally:
+            # Reset continuation flag
+            if hasattr(magentic_orchestration, "_manager"):
+                magentic_orchestration._manager.is_continuation = False
+                magentic_orchestration._manager.current_plan_id = None
+            await runtime.stop_when_idle()
+    
     async def run_orchestration(self, user_id, input_task) -> None:
         """Run the orchestration with user input loop."""
 

@@ -8,11 +8,14 @@ import v3.models.messages as messages
 from auth.auth_utils import get_authenticated_user_details
 from common.database.database_factory import DatabaseFactory
 from common.models.messages_kernel import (
+    AgentMessage,
+    AgentType,
     InputTask,
     Plan,
     PlanStatus,
     TeamSelectionRequest,
 )
+from v3.models.messages import WebsocketMessageType
 from common.utils.event_utils import track_event_if_configured
 from common.utils.utils_kernel import rai_success, rai_validate_team_config
 from fastapi import (
@@ -327,6 +330,211 @@ async def process_request(
         raise HTTPException(
             status_code=400, detail=f"Error starting request: {e}"
         ) from e
+
+
+@app_v3.post("/continue_plan")
+async def continue_plan(
+    request_body: dict,
+    request: Request
+):
+    """
+    Continue an existing plan with a follow-up question by directly calling the analysis agent.
+    This appends the answer to the existing conversation without creating a new plan.
+    
+    ---
+    tags:
+      - Plans
+    parameters:
+      - name: user_principal_id
+        in: header
+        type: string
+        required: true
+        description: User ID extracted from the authentication header
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              plan_id:
+                type: string
+                description: The ID of the plan to continue
+              follow_up_question:
+                type: string
+                description: The follow-up question or task to add to the conversation
+    responses:
+      200:
+        description: Plan continuation started successfully
+      400:
+        description: Invalid input or RAI check failed
+      404:
+        description: Plan not found
+    """
+    plan_id = request_body.get("plan_id")
+    follow_up_question = request_body.get("follow_up_question")
+    
+    if not plan_id or not follow_up_question:
+        raise HTTPException(
+            status_code=400, 
+            detail="Both plan_id and follow_up_question are required"
+        )
+    
+    # RAI check
+    if not await rai_success(follow_up_question):
+        track_event_if_configured(
+            "RAI failed",
+            {
+                "status": "Follow-up question blocked - RAI check failed",
+                "question": follow_up_question,
+                "plan_id": plan_id,
+            },
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Request contains content that doesn't meet our safety guidelines, try again.",
+        )
+    
+    authenticated_user = get_authenticated_user_details(request_headers=request.headers)
+    user_id = authenticated_user["user_principal_id"]
+    
+    if not user_id:
+        raise HTTPException(status_code=400, detail="no user found")
+    
+    try:
+        # Get the existing plan
+        memory_store = await DatabaseFactory.get_database(user_id=user_id)
+        plan = await memory_store.get_plan(plan_id=plan_id)
+        
+        if not plan:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Plan {plan_id} not found"
+            )
+        
+        # Get team configuration to find the analysis agent
+        team = await memory_store.get_team_by_id(team_id=plan.team_id)
+        if not team:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Team configuration not found"
+            )
+        
+        # Find the analysis/reasoning agent (DataAnalysisAgent or AnalysisRecommendationAgent)
+        analysis_agent = None
+        for agent in team.agents:
+            if agent.use_reasoning or 'analysis' in agent.name.lower():
+                analysis_agent = agent
+                break
+        
+        if not analysis_agent:
+            raise HTTPException(
+                status_code=404,
+                detail="No analysis agent found in team configuration"
+            )
+        
+        # Get previous messages for context
+        messages = await memory_store.get_agent_messages(plan_id=plan_id)
+        
+        # Build context from previous conversation
+        context_parts = []
+        context_parts.append(f"Original task: {plan.initial_goal}")
+        
+        # Add recent agent messages as context (last 5 messages)
+        recent_messages = messages[-5:] if len(messages) > 5 else messages
+        for msg in recent_messages:
+            if hasattr(msg, 'agent') and hasattr(msg, 'content'):
+                context_parts.append(f"{msg.agent}: {msg.content}")
+        
+        # Construct the message with context
+        context_text = "\n".join(context_parts)
+        full_message = f"""Based on the previous conversation:
+
+{context_text}
+
+User's follow-up question: {follow_up_question}
+
+Please provide a direct answer to the follow-up question."""
+        
+        # Directly invoke the analysis agent
+        from v3.magentic_agents.magentic_agent_factory import MagenticAgentFactory
+        
+        factory = MagenticAgentFactory()
+        agent_instance = await factory.create_agent_from_config(user_id, analysis_agent)
+        
+        # Stream the response
+        response_content = ""
+        async for response in agent_instance.invoke(full_message):
+            response_content += str(response)
+        
+        # Send response via WebSocket
+        await connection_config.send_status_update_async(
+            {
+                "type": WebsocketMessageType.FINAL_RESULT_MESSAGE,
+                "data": {
+                    "content": response_content,
+                    "status": "completed",
+                    "timestamp": asyncio.get_event_loop().time(),
+                    "is_follow_up": True,
+                },
+            },
+            user_id,
+            message_type=WebsocketMessageType.FINAL_RESULT_MESSAGE,
+        )
+        
+        # Save the follow-up Q&A as agent messages
+        # User question
+        user_message = AgentMessage(
+            plan_id=plan_id,
+            agent="User",
+            agent_type=AgentType.HUMAN_AGENT,
+            content=follow_up_question,
+            timestamp=asyncio.get_event_loop().time(),
+        )
+        await memory_store.add_agent_message(user_message)
+        
+        # Agent response
+        agent_message = AgentMessage(
+            plan_id=plan_id,
+            agent=analysis_agent.name,
+            agent_type=AgentType.REASONING_AGENT if analysis_agent.use_reasoning else AgentType.AI_AGENT,
+            content=response_content,
+            timestamp=asyncio.get_event_loop().time(),
+        )
+        await memory_store.add_agent_message(agent_message)
+        
+        track_event_if_configured(
+            "FollowUpAnswered",
+            {
+                "status": "success",
+                "plan_id": plan_id,
+                "user_id": user_id,
+                "follow_up_question": follow_up_question,
+                "agent_used": analysis_agent.name,
+            },
+        )
+        
+        return {
+            "status": "Follow-up answered successfully",
+            "plan_id": plan_id,
+            "session_id": plan.session_id,
+            "answer": response_content,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error continuing plan: {e}")
+        track_event_if_configured(
+            "PlanContinuationFailed",
+            {
+                "status": "error",
+                "plan_id": plan_id,
+                "user_id": user_id,
+                "error": str(e),
+            },
+        )
+        raise HTTPException(status_code=500, detail=f"Failed to continue plan: {str(e)}")
 
 
 @app_v3.post("/plan_approval")

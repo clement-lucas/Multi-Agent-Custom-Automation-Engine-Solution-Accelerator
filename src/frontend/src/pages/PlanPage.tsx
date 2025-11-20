@@ -327,19 +327,34 @@ const PlanPage: React.FC = () => {
                 console.warn('⚠️ Final result message missing data:', finalMessage);
                 return;
             }
+            
+            // Check if this is a follow-up response
+            const isFollowUp = finalMessage.data?.is_follow_up === true;
+            
             const agentMessageData = {
-                agent: AgentType.GROUP_CHAT_MANAGER,
+                agent: isFollowUp ? 'DataAnalysisAgent' : AgentType.GROUP_CHAT_MANAGER,
                 agent_type: AgentMessageType.AI_AGENT,
                 timestamp: Date.now(),
                 steps: [],   // intentionally always empty
                 next_steps: [],  // intentionally always empty
-                content: "🎉🎉 " + (finalMessage.data?.content || ''),
+                content: isFollowUp ? (finalMessage.data?.content || '') : ("🎉🎉 " + (finalMessage.data?.content || '')),
                 raw_data: finalMessage || '',
             } as AgentMessageData;
 
 
             console.log('✅ Parsed final result message:', agentMessageData);
-            // we ignore the terminated message 
+            
+            // Handle follow-up responses immediately without status check
+            if (isFollowUp) {
+                setShowProcessingPlanSpinner(false);
+                setAgentMessages(prev => [...prev, agentMessageData]);
+                scrollToBottom();
+                // Keep input enabled so user can ask more follow-up questions
+                setSubmittingChatDisableInput(false);
+                return;
+            }
+            
+            // Original logic for plan completion messages
             if (finalMessage?.data?.status === PlanStatus.COMPLETED) {
 
                 setShowBufferingText(true);
@@ -578,26 +593,49 @@ const PlanPage: React.FC = () => {
 
             if (!planData?.plan) return;
 
-            // If plan is completed, treat input as a new task (follow-up question)
+            // If plan is completed, continue the same plan with context
             if (planData.plan.overall_status === PlanStatus.COMPLETED) {
-                const id = showToast("Creating new plan", "progress");
+                const id = showToast("Submitting follow-up question", "progress");
                 
                 try {
-                    // Submit as a new task using TaskService which generates session_id
-                    const response = await TaskService.createPlan(chatInput);
+                    // Continue the existing plan instead of creating a new one
+                    const response = await TaskService.continuePlan(
+                        planData.plan.id,
+                        chatInput
+                    );
                     
                     dismissToast(id);
                     
-                    if (response.plan_id) {
-                        // Navigate to the new plan page
-                        navigate(`/plan/${response.plan_id}`);
+                    if (response.status) {
+                        showToast("Follow-up question submitted successfully", "success");
+                        
+                        // Update UI state to show processing
+                        setSubmittingChatDisableInput(true);
+                        setShowProcessingPlanSpinner(true);
+                        
+                        // Add user message to chat
+                        const agentMessageData = {
+                            agent: 'human',
+                            agent_type: AgentMessageType.HUMAN_AGENT,
+                            timestamp: Date.now(),
+                            steps: [],
+                            next_steps: [],
+                            content: chatInput,
+                            raw_data: chatInput,
+                        } as AgentMessageData;
+                        
+                        setAgentMessages((prev: any) => [...prev, agentMessageData]);
+                        scrollToBottom();
+                        
+                        // Reload plan data
+                        await loadPlanData();
                     } else {
-                        showToast("Failed to create plan", "error");
+                        showToast("Failed to submit follow-up question", "error");
                     }
                 } catch (error: any) {
                     dismissToast(id);
                     showToast(
-                        error?.message || "Failed to create plan",
+                        error?.message || "Failed to submit follow-up question",
                         "error"
                     );
                 }
@@ -632,7 +670,7 @@ const PlanPage: React.FC = () => {
                     raw_data: chatInput || '',
                 } as AgentMessageData;
 
-                setAgentMessages(prev => [...prev, agentMessageData]);
+                setAgentMessages((prev: any) => [...prev, agentMessageData]);
                 setSubmittingChatDisableInput(true);
                 setShowProcessingPlanSpinner(true);
                 scrollToBottom();
@@ -653,26 +691,48 @@ const PlanPage: React.FC = () => {
         [planData?.plan, showToast, dismissToast, loadPlanData, navigate]
     );
 
-    // Handler for follow-up questions - submits as a new task
+    // Handler for follow-up questions - continues the same plan with context
     const handleFollowUpQuestion = useCallback(
         async (question: string) => {
             if (!question.trim()) {
                 return;
             }
 
+            if (!planData?.plan) return;
+
             const id = showToast("Submitting follow-up question", "progress");
 
             try {
-                // Submit as a new task using TaskService which generates session_id
-                const response = await TaskService.createPlan(question);
+                // Continue the existing plan instead of creating a new one
+                const response = await TaskService.continuePlan(
+                    planData.plan.id,
+                    question
+                );
                 
                 dismissToast(id);
                 
-                if (response.plan_id) {
-                    // Navigate to the new plan page
-                    navigate(`/plan/${response.plan_id}`);
+                if (response.status) {
+                    showToast("Follow-up question submitted successfully", "success");
+                    
+                    // Update UI state to show processing
+                    setSubmittingChatDisableInput(true);
+                    setShowProcessingPlanSpinner(true);
+                    
+                    // Add user message to chat
+                    const agentMessageData = {
+                        agent: 'human',
+                        agent_type: AgentMessageType.HUMAN_AGENT,
+                        timestamp: Date.now(),
+                        steps: [],
+                        next_steps: [],
+                        content: question,
+                        raw_data: question,
+                    } as AgentMessageData;
+                    
+                    setAgentMessages((prev: any) => [...prev, agentMessageData]);
+                    scrollToBottom();
                 } else {
-                    showToast("Failed to create plan for follow-up question", "error");
+                    showToast("Failed to submit follow-up question", "error");
                 }
             } catch (error: any) {
                 dismissToast(id);
@@ -682,7 +742,7 @@ const PlanPage: React.FC = () => {
                 );
             }
         },
-        [showToast, dismissToast, navigate]
+        [planData?.plan, showToast, dismissToast, scrollToBottom]
     );
 
 
