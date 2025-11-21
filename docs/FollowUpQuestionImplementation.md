@@ -249,6 +249,188 @@ class MagenticAgentFactory:
 
 ---
 
+### Phase 8: User Message Display Fix (November 21, 2025)
+
+**Issue:** Follow-up questions submitted via chat input or follow-up buttons were not appearing in the chat UI as user messages.
+
+**Root Cause:** User messages were being added to the chat AFTER the API call completed, causing timing issues where:
+- Messages might not appear if there was a delay or error
+- WebSocket responses could arrive before the user message was displayed
+- User couldn't see their question before the AI response appeared
+
+#### Immediate Message Display Fix
+**File:** `src/frontend/src/pages/PlanPage.tsx`
+
+**Change 1: Chat Input Handler (`handleOnchatSubmit`)**
+
+**Before:**
+```typescript
+// If plan is completed, continue the same plan with context
+if (planData.plan.overall_status === PlanStatus.COMPLETED) {
+    const id = showToast("Submitting follow-up question", "progress");
+    
+    try {
+        const response = await TaskService.continuePlan(
+            planData.plan.id,
+            chatInput
+        );
+        
+        dismissToast(id);
+        
+        if (response.status) {
+            showToast("Follow-up question submitted successfully", "success");
+            
+            // Update UI state to show processing
+            setSubmittingChatDisableInput(true);
+            setShowProcessingPlanSpinner(true);
+            
+            // ❌ PROBLEM: Add user message AFTER API call
+            const agentMessageData = {
+                agent: 'human',
+                agent_type: AgentMessageType.HUMAN_AGENT,
+                timestamp: Date.now(),
+                steps: [],
+                next_steps: [],
+                content: chatInput,
+                raw_data: chatInput,
+            } as AgentMessageData;
+            
+            setAgentMessages((prev: any) => [...prev, agentMessageData]);
+            scrollToBottom();
+```
+
+**After:**
+```typescript
+// If plan is completed, continue the same plan with context
+if (planData.plan.overall_status === PlanStatus.COMPLETED) {
+    // ✅ FIXED: Add user message IMMEDIATELY before API call
+    const agentMessageData = {
+        agent: 'human',
+        agent_type: AgentMessageType.HUMAN_AGENT,
+        timestamp: Date.now(),
+        steps: [],
+        next_steps: [],
+        content: chatInput,
+        raw_data: chatInput,
+    } as AgentMessageData;
+    
+    setAgentMessages((prev: any) => [...prev, agentMessageData]);
+    scrollToBottom();
+    
+    const id = showToast("Submitting follow-up question", "progress");
+    
+    // Update UI state to show processing
+    setSubmittingChatDisableInput(true);
+    setShowProcessingPlanSpinner(true);
+    
+    try {
+        const response = await TaskService.continuePlan(
+            planData.plan.id,
+            chatInput
+        );
+        
+        dismissToast(id);
+        
+        if (response.status) {
+            showToast("Follow-up question submitted successfully", "success");
+```
+
+**Change 2: Follow-Up Button Handler (`handleFollowUpQuestion`)**
+
+**Before:**
+```typescript
+const handleFollowUpQuestion = useCallback(
+    async (question: string) => {
+        if (!question.trim()) {
+            return;
+        }
+
+        if (!planData?.plan) return;
+
+        const id = showToast("Submitting follow-up question", "progress");
+
+        try {
+            const response = await TaskService.continuePlan(
+                planData.plan.id,
+                question
+            );
+            
+            dismissToast(id);
+            
+            if (response.status) {
+                showToast("Follow-up question submitted successfully", "success");
+                
+                // Update UI state to show processing
+                setSubmittingChatDisableInput(true);
+                setShowProcessingPlanSpinner(true);
+                
+                // ❌ PROBLEM: Add user message AFTER API call
+                const agentMessageData = {
+                    agent: 'human',
+                    agent_type: AgentMessageType.HUMAN_AGENT,
+                    timestamp: Date.now(),
+                    steps: [],
+                    next_steps: [],
+                    content: question,
+                    raw_data: question,
+                } as AgentMessageData;
+                
+                setAgentMessages((prev: any) => [...prev, agentMessageData]);
+                scrollToBottom();
+```
+
+**After:**
+```typescript
+const handleFollowUpQuestion = useCallback(
+    async (question: string) => {
+        if (!question.trim()) {
+            return;
+        }
+
+        if (!planData?.plan) return;
+
+        // ✅ FIXED: Add user message IMMEDIATELY before API call
+        const agentMessageData = {
+            agent: 'human',
+            agent_type: AgentMessageType.HUMAN_AGENT,
+            timestamp: Date.now(),
+            steps: [],
+            next_steps: [],
+            content: question,
+            raw_data: question,
+        } as AgentMessageData;
+        
+        setAgentMessages((prev: any) => [...prev, agentMessageData]);
+        scrollToBottom();
+
+        const id = showToast("Submitting follow-up question", "progress");
+
+        // Update UI state to show processing
+        setSubmittingChatDisableInput(true);
+        setShowProcessingPlanSpinner(true);
+
+        try {
+            const response = await TaskService.continuePlan(
+                planData.plan.id,
+                question
+            );
+            
+            dismissToast(id);
+            
+            if (response.status) {
+                showToast("Follow-up question submitted successfully", "success");
+```
+
+**Impact:**
+- User messages now appear instantly in the chat UI
+- Messages display before the API call, ensuring immediate visual feedback
+- Consistent behavior whether user types in chat or clicks a follow-up button
+- Eliminates race condition where AI response could appear before user question
+
+**Deployment:** Version 20251121-013241-0196884
+
+---
+
 ## Technical Architecture
 
 ### Context Flow
@@ -333,6 +515,7 @@ INFO:v3.magentic_agents.magentic_agent_factory:Successfully created and initiali
 | 5 | Follow-up not processed | Added `is_follow_up` flag check | 20251120-185652 |
 | 6 | Import error | Fixed WebsocketMessageType import path | 20251120-191149 |
 | 7 | Agent factory error | Fixed method name and instantiation | 20251120-194351 |
+| 8 | User message not displayed | Add message before API call, not after | 20251121-013241 |
 
 ---
 
@@ -390,7 +573,7 @@ await continuePlan(planId, question);
 
 ## Deployment Information
 
-- **Current Version:** 20251120-194351-c9cd75d
+- **Current Version:** 20251121-013241-0196884
 - **Backend Container App:** ca-odmadevycpyl
 - **Frontend App Service:** app-odmadevycpyl
 - **Resource Group:** rg-odmadev
@@ -417,5 +600,6 @@ The follow-up question feature has been successfully implemented with a lightwei
 ✅ WebSocket handling corrected  
 ✅ Import errors resolved  
 ✅ Agent factory errors fixed  
+✅ User message display timing fixed  
 
-The system now supports seamless follow-up questions within the same plan context, providing a better user experience without the complexity of full orchestration.
+The system now supports seamless follow-up questions within the same plan context, providing a better user experience without the complexity of full orchestration. Users can ask follow-up questions via chat input or by clicking follow-up suggestion buttons, with their messages appearing immediately in the chat UI before the AI response arrives.

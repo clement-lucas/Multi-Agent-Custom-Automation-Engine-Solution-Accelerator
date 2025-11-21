@@ -595,7 +595,25 @@ const PlanPage: React.FC = () => {
 
             // If plan is completed, continue the same plan with context
             if (planData.plan.overall_status === PlanStatus.COMPLETED) {
+                // Add user message to chat IMMEDIATELY so it appears before API call
+                const agentMessageData = {
+                    agent: 'human',
+                    agent_type: AgentMessageType.HUMAN_AGENT,
+                    timestamp: Date.now(),
+                    steps: [],
+                    next_steps: [],
+                    content: chatInput,
+                    raw_data: chatInput,
+                } as AgentMessageData;
+                
+                setAgentMessages((prev: any) => [...prev, agentMessageData]);
+                scrollToBottom();
+                
                 const id = showToast("Submitting follow-up question", "progress");
+                
+                // Update UI state to show processing
+                setSubmittingChatDisableInput(true);
+                setShowProcessingPlanSpinner(true);
                 
                 try {
                     // Continue the existing plan instead of creating a new one
@@ -608,24 +626,6 @@ const PlanPage: React.FC = () => {
                     
                     if (response.status) {
                         showToast("Follow-up question submitted successfully", "success");
-                        
-                        // Update UI state to show processing
-                        setSubmittingChatDisableInput(true);
-                        setShowProcessingPlanSpinner(true);
-                        
-                        // Add user message to chat
-                        const agentMessageData = {
-                            agent: 'human',
-                            agent_type: AgentMessageType.HUMAN_AGENT,
-                            timestamp: Date.now(),
-                            steps: [],
-                            next_steps: [],
-                            content: chatInput,
-                            raw_data: chatInput,
-                        } as AgentMessageData;
-                        
-                        setAgentMessages((prev: any) => [...prev, agentMessageData]);
-                        scrollToBottom();
                         
                         // Reload plan data
                         await loadPlanData();
@@ -700,7 +700,25 @@ const PlanPage: React.FC = () => {
 
             if (!planData?.plan) return;
 
+            // Add user message to chat IMMEDIATELY so it appears before API call
+            const agentMessageData = {
+                agent: 'human',
+                agent_type: AgentMessageType.HUMAN_AGENT,
+                timestamp: Date.now(),
+                steps: [],
+                next_steps: [],
+                content: question,
+                raw_data: question,
+            } as AgentMessageData;
+            
+            setAgentMessages((prev: any) => [...prev, agentMessageData]);
+            scrollToBottom();
+
             const id = showToast("Submitting follow-up question", "progress");
+
+            // Update UI state to show processing
+            setSubmittingChatDisableInput(true);
+            setShowProcessingPlanSpinner(true);
 
             try {
                 // Continue the existing plan instead of creating a new one
@@ -713,24 +731,6 @@ const PlanPage: React.FC = () => {
                 
                 if (response.status) {
                     showToast("Follow-up question submitted successfully", "success");
-                    
-                    // Update UI state to show processing
-                    setSubmittingChatDisableInput(true);
-                    setShowProcessingPlanSpinner(true);
-                    
-                    // Add user message to chat
-                    const agentMessageData = {
-                        agent: 'human',
-                        agent_type: AgentMessageType.HUMAN_AGENT,
-                        timestamp: Date.now(),
-                        steps: [],
-                        next_steps: [],
-                        content: question,
-                        raw_data: question,
-                    } as AgentMessageData;
-                    
-                    setAgentMessages((prev: any) => [...prev, agentMessageData]);
-                    scrollToBottom();
                 } else {
                     showToast("Failed to submit follow-up question", "error");
                 }
