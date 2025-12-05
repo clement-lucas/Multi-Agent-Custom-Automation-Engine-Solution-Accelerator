@@ -37,10 +37,14 @@ const PlanPanelRight: React.FC<PlanDetailsProps> = ({
 
     return planApprovalRequest.steps.map((step, index) => {
       const action = step.action || step.cleanAction || '';
+      const agent = step.agent || 'System';
       const isHeading = action.trim().endsWith(':');
+      
+      // Format: [AgentName] action
+      const displayText = `[${agent}] ${action.trim()}`;
 
       return {
-        text: action.trim(),
+        text: displayText,
         isHeading,
         key: `${index}-${action.substring(0, 20)}`
       };

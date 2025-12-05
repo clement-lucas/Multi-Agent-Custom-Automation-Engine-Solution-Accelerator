@@ -216,12 +216,15 @@ const extractDynamicContent = (planApprovalRequest: MPlanData): {
         planApprovalRequest.steps.forEach(step => {
             // Use whichever action field has content
             const action = step.action || step.cleanAction || '';
+            const agent = step.agent || 'System';
             if (action.trim()) {
+                // Format: [AgentName] action
+                const displayText = `[${agent}] ${action.trim()}`;
                 // Check if it ends with colon (heading) or is a regular step
                 if (action.trim().endsWith(':')) {
-                    planSteps.push({ type: 'heading', text: action.trim() });
+                    planSteps.push({ type: 'heading', text: displayText });
                 } else {
-                    planSteps.push({ type: 'substep', text: action.trim() });
+                    planSteps.push({ type: 'substep', text: displayText });
                 }
             }
         });
