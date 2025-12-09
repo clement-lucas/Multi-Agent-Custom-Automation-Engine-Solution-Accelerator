@@ -1294,7 +1294,7 @@ module containerApp 'br/public:avm/res/app/container-app:0.18.1' = {
           {
             name: 'BING_CONNECTION_NAME'
             value: 'binggrnd' 
-          } 
+          }
           {
             name: 'REASONING_MODEL_NAME'
             value: aiFoundryAiServicesReasoningModelDeployment.name

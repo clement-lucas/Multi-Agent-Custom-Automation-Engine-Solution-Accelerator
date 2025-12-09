@@ -3,15 +3,12 @@
 import logging
 from typing import Awaitable, List, Optional
 
-from azure.ai.agents.models import AzureAISearchTool, CodeInterpreterToolDefinition
+from azure.ai.agents.models import AzureAISearchTool, BingGroundingTool, CodeInterpreterToolDefinition
 from semantic_kernel.agents import Agent, AzureAIAgent  # pylint: disable=E0611
 from v3.magentic_agents.common.lifecycle import AzureAgentBase
-from v3.magentic_agents.models.agent_models import MCPConfig, SearchConfig
+from v3.magentic_agents.models.agent_models import BingConfig, MCPConfig, SearchConfig
 
 from v3.config.agent_registry import agent_registry
-
-# from v3.magentic_agents.models.agent_models import (BingConfig, MCPConfig,
-#                                                     SearchConfig)
 
 # exception too broad warning
 # pylint: disable=w0718
@@ -28,7 +25,7 @@ class FoundryAgentTemplate(AzureAgentBase):
         model_deployment_name: str,
         enable_code_interpreter: bool = False,
         mcp_config: MCPConfig | None = None,
-        # bing_config: BingConfig | None = None,
+        bing_config: BingConfig | None = None,
         search_config: SearchConfig | None = None,
     ) -> None:
         super().__init__(mcp=mcp_config)
@@ -37,7 +34,7 @@ class FoundryAgentTemplate(AzureAgentBase):
         self.agent_instructions = agent_instructions
         self.model_deployment_name = model_deployment_name
         self.enable_code_interpreter = enable_code_interpreter
-        # self.bing = bing_config
+        self.bing = bing_config
         self.mcp = mcp_config
         self.search = search_config
         self._search_connection = None
@@ -49,20 +46,19 @@ class FoundryAgentTemplate(AzureAgentBase):
                 "The current version of Foundry agents do not support reasoning models."
             )
 
-    # Uncomment to enable bing grounding capabilities (requires Bing connection in Foundry and uncommenting other code)
-    # async def _make_bing_tool(self) -> Optional[BingGroundingTool]:
-    #     """Create Bing search tool for web search."""
-    #     if not all([self.client, self.bing.connection_name]):
-    #         self.logger.info("Bing tool not enabled")
-    #         return None
-    #     try:
-    #         self._bing_connection = await self.client.connections.get(name=self.bing.connection_name)
-    #         bing_tool = BingGroundingTool(connection_id=self._bing_connection.id)
-    #         self.logger.info("Bing tool created with connection %s", self._bing_connection.id)
-    #         return bing_tool
-    #     except Exception as ex:
-    #         self.logger.error("Bing tool creation failed: %s", ex)
-    #         return None
+    async def _make_bing_tool(self) -> Optional[BingGroundingTool]:
+        """Create Bing search tool for web search."""
+        if not all([self.client, self.bing.connection_name]):
+            self.logger.info("Bing tool not enabled")
+            return None
+        try:
+            self._bing_connection = await self.client.connections.get(name=self.bing.connection_name)
+            bing_tool = BingGroundingTool(connection_id=self._bing_connection.id)
+            self.logger.info("Bing tool created with connection %s", self._bing_connection.id)
+            return bing_tool
+        except Exception as ex:
+            self.logger.error("Bing tool creation failed: %s", ex)
+            return None
 
     async def _make_azure_search_tool(self) -> Optional[AzureAISearchTool]:
         """Create Azure AI Search tool for RAG capabilities."""
@@ -120,13 +116,13 @@ class FoundryAgentTemplate(AzureAgentBase):
                 )
 
         # Add Bing search tool
-        # if self.bing and self.bing.connection_name:
-        #     bing_tool = await self._make_bing_tool()
-        #     if bing_tool:
-        #         tools.extend(bing_tool.definitions)
-        #         self.logger.info("Added Bing search tools: %d tools", len(bing_tool.definitions))
-        #     else:
-        #         self.logger.error("Something went wrong, Bing tool not configured")
+        if self.bing and self.bing.connection_name:
+            bing_tool = await self._make_bing_tool()
+            if bing_tool:
+                tools.extend(bing_tool.definitions)
+                self.logger.info("Added Bing search tools: %d tools", len(bing_tool.definitions))
+            else:
+                self.logger.error("Something went wrong, Bing tool not configured")
 
         if self.enable_code_interpreter:
             try:
