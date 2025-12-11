@@ -24,6 +24,23 @@
       "index_endpoint": "",
       "coding_tools": false
     },
+        {
+      "input_key": "",
+      "type": "",
+      "name": "BingSearchAgent",
+      "deployment_name": "gpt-4.1-mini",
+      "icon": "",
+      "system_message": "You have access to internet to check for latest information related with the question from user. You can check weather forecast information from relevant websites. Pass the information you retrieve to DataAnalysisAgent for analysis and planning, you do not reason and do not perform analysis on the data. Pass the data you retrieve to VisualizationAgent to create data visualization such as graph. You do not create graphs.",
+      "description": "An agent that has access to internet to check for latest information such as weather forecast, ask this agent if you have questions such us best day to do promotion, latest trend, etc.",
+      "use_rag": false,
+      "use_mcp": false,
+      "use_bing": true,
+      "use_reasoning": false,
+      "index_name": "",
+      "index_foundry_name": "",
+      "index_endpoint": "",
+      "coding_tools": false
+    },
     {
       "input_key": "",
       "type": "",

@@ -875,7 +875,7 @@ module aiFoundryAiServices 'br:mcr.microsoft.com/bicep/avm/res/cognitive-service
     tags: tags
     sku: 'S0'
     kind: 'AIServices'
-    disableLocalAuth: true
+    disableLocalAuth: false
     allowProjectManagement: true
     customSubDomainName: aiFoundryAiServicesResourceName
     apiProperties: {

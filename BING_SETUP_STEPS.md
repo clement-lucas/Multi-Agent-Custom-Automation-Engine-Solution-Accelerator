@@ -51,13 +51,52 @@ az resource show --ids "$RESOURCE_ID" --api-version 2020-06-10 -o table
 7. **Important**: Name the connection **`binggrnd`** (this matches the environment variable configuration)
 8. Click **Create**
 
-## Step 3: Verify Local Authentication is Enabled
+## Step 3: Verify Local Authentication is Enabled (CRITICAL)
 
 ⚠️ **Critical**: Bing Search Grounding only supports API key authentication.
 
-1. In Azure AI Studio, go to your AI Foundry project settings
-2. Check that **Local Authentication** is **Enabled**
-3. If disabled, you won't be able to use Bing grounding
+**This is the most common cause of the 401 Unauthorized error!**
+
+### Check Local Authentication Status:
+
+```bash
+# Get your AI Foundry resource name from the deployment
+AI_FOUNDRY_RESOURCE=$(az resource list --resource-type "Microsoft.CognitiveServices/accounts" \
+  --query "[?kind=='AIServices'].name" -o tsv | head -1)
+
+# Check if local auth is enabled
+az cognitiveservices account show \
+  --name $AI_FOUNDRY_RESOURCE \
+  --resource-group $RESOURCE_GROUP \
+  --query "properties.disableLocalAuth" -o tsv
+```
+
+**Expected output: `false`** (meaning local auth is ENABLED)
+
+If the output is `true`, you need to enable it:
+
+```bash
+# Enable local authentication
+az cognitiveservices account update \
+  --name $AI_FOUNDRY_RESOURCE \
+  --resource-group $RESOURCE_GROUP \
+  --set properties.disableLocalAuth=false
+```
+
+### Alternative: Check in Azure Portal
+
+1. Go to [Azure Portal](https://portal.azure.com)
+2. Navigate to your AI Services resource (the one used by your AI Foundry project)
+3. Go to **Settings** → **Keys and Endpoint** (or **Resource Management**)
+4. Look for **Local Authentication** setting
+5. Ensure it is **Enabled**
+6. If not, enable it and save
+
+⚠️ **Without local authentication enabled, you will get this error:**
+```
+Error: bing_search_user_error; [bing_search] Failed to call Get Bing Grounding Search Results API with status 401: 
+{ "statusCode": 401, "message": "Unauthorized. Access token is missing, invalid, audience is incorrect (https://bing.azure.com), or have expired." }
+```
 
 ## Step 4: Enable Bing in Agent Configuration
 
@@ -101,13 +140,38 @@ After deployment:
 
 ## Troubleshooting
 
+### Error: "Unauthorized. Access token is missing, invalid, audience is incorrect (https://bing.azure.com), or have expired"
+
+**This is the most common error!**
+
+**Root Cause**: Local Authentication is disabled on your AI Foundry AI Services resource.
+
+**Solution**:
+1. Check if local auth is disabled:
+   ```bash
+   az cognitiveservices account show \
+     --name <your-ai-foundry-resource-name> \
+     --resource-group <your-resource-group> \
+     --query "properties.disableLocalAuth" -o tsv
+   ```
+   
+2. If it returns `true`, enable it:
+   ```bash
+   az cognitiveservices account update \
+     --name <your-ai-foundry-resource-name> \
+     --resource-group <your-resource-group> \
+     --set properties.disableLocalAuth=false
+   ```
+
+3. Redeploy or restart your container app after enabling
+
 ### Error: "Connection can't be found in this workspace"
 - Verify the connection name in AI Foundry is exactly **`binggrnd`**
-- Check that Local Authentication is enabled in AI Foundry
+- Check that the connection was created successfully in the portal
 
 ### Error: "Provider 'Microsoft.Bing' is not registered"
 - Run: `az provider register --namespace Microsoft.Bing`
-- Wait for registration to complete (check with `az provider show`)
+- Wait for registration to complete (check with `az provider show --namespace Microsoft.Bing`)
 
 ### Error: "Bing tool not enabled"
 - Verify `use_bing: true` in agent JSON configuration
