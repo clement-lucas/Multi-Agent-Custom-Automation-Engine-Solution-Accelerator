@@ -1287,14 +1287,14 @@ module containerApp 'br/public:avm/res/app/container-app:0.18.1' = {
             name: 'AZURE_COGNITIVE_SERVICES'
             value: 'https://cognitiveservices.azure.com/.default' 
           }
-          {
-            name: 'AZURE_BING_CONNECTION_NAME'
-            value: 'binggrnd' 
-          }
-          {
-            name: 'BING_CONNECTION_NAME'
-            value: 'binggrnd' 
-          }
+          // {
+          //   name: 'AZURE_BING_CONNECTION_NAME'
+          //   value: 'binggrnd' 
+          // }
+          // {
+          //   name: 'BING_CONNECTION_NAME'
+          //   value: 'binggrnd' 
+          // }
           {
             name: 'REASONING_MODEL_NAME'
             value: aiFoundryAiServicesReasoningModelDeployment.name
