@@ -63,17 +63,35 @@ class ReasoningSearch:
             results = self.search_client.search(
                 search_text=query,
                 query_type="simple",
-                select=["content"],
+                select=["content", "title", "metadata_storage_path", "metadata_storage_name", "chunk_id"],
                 top=limit_int,
             )
 
             for result in results:
-                search_results.append(f"content: {result['content']}")
+                content = result.get('content', '')
+                title = result.get('title', 'Unknown')
+                storage_path = result.get('metadata_storage_path', '')
+                storage_name = result.get('metadata_storage_name', '')
+                chunk_id = result.get('chunk_id', '')
+                
+                # Format result with citation information
+                result_text = f"Content: {content}"
+                if storage_path and storage_name:
+                    citation = f"\nSource: [{storage_name}]({storage_path})"
+                    if chunk_id:
+                        citation += f" (Chunk ID: {chunk_id})"
+                    result_text += citation
+                elif title:
+                    result_text += f"\nSource: {title}"
+                    if chunk_id:
+                        result_text += f" (Chunk ID: {chunk_id})"
+                
+                search_results.append(result_text)
 
             if not search_results:
                 return f"No relevant documents found for query: '{query}'"
 
-            return search_results
+            return "\n\n---\n\n".join(search_results)
 
         except Exception as ex:
             return f"Search failed: {str(ex)}"

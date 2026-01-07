@@ -19,7 +19,12 @@ from v3.models.messages import (
 
 
 def clean_citations(text: str) -> str:
-    """Remove citation markers from agent responses while preserving formatting."""
+    """Remove citation markers from agent responses while preserving formatting.
+    
+    Note: This function removes inline citation markers like [1], [doc1], etc.
+    For agents that should show citations, configure them to append full citation
+    references at the end of their responses in the system message.
+    """
     if not text:
         return text
 

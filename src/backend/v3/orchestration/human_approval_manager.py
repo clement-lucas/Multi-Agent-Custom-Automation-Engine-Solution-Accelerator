@@ -40,8 +40,6 @@ class HumanApprovalMagenticManager(StandardMagenticManager):
     approval_enabled: bool = True
     magentic_plan: Optional[MPlan] = None
     current_user_id: str
-    is_continuation: bool = False
-    current_plan_id: Optional[str] = None
 
     def __init__(self, user_id: str, *args, **kwargs):
         """
@@ -75,13 +73,7 @@ Here is an example of a well-structured plan:
 """
 
         final_append = """
-After providing the final answer, ask if you can help the user with anything else related to this topic.
-Then generate exactly 3 follow-up questions based on the task that was completed. Format them as a numbered list:
-1. [First follow-up question]
-2. [Second follow-up question]
-3. [Third follow-up question]
-
-Make the questions relevant, specific, and actionable based on the context of the completed task.
+ DO NOT EVER OFFER TO HELP FURTHER IN THE FINAL ANSWER! Just provide the final answer and end with a polite closing.
 """
 
         # kwargs["task_ledger_facts_prompt"] = ORCHESTRATOR_TASK_LEDGER_FACTS_PROMPT + facts_append
